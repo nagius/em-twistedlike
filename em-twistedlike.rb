@@ -14,7 +14,7 @@ module EventMachine
 			begin
 				block.call
 			rescue StandardError => e
-				d.tfail(e)
+				d.fail(e)
 			end
 		}
 
@@ -41,12 +41,12 @@ module EventMachine
 				begin
 					result = block.call(*@deferred_args)
 					if result.kind_of? Exception
-						tfail(result)
+						fail(result)
 					else
 						succeed(result)
 					end
 				rescue StandardError => e
-					tfail(e)
+					fail(e)
 				end
 			end
 
@@ -66,17 +66,24 @@ module EventMachine
 		end
 		
 		# Trigger the errback chain with wrapping the arg in an Exception if not one
-		# Named tfail() "twisted-fail" to not interfere with other libraries
-		def tfail reason
-			if not reason.kind_of? Exception
-				reason = RuntimeError.new(reason)
-			end
-
-			# Raise exception if there is no errback to handle it
-			if @errbacks.nil? || @errbacks.empty?
-				raise reason
+		def fail(*args)
+			if args.size > 1
+				# Multiple arguments: default EM behavior
+				set_deferred_status :failed, *args
 			else
-				fail(reason)
+				# One argument: convert to Exception
+				reason = args.first
+
+				if not reason.instance_of? Failure
+					reason = Failure.new(reason)
+				end
+
+				# Raise exception if there is no errback to handle it
+				if @errbacks.nil? || @errbacks.empty?
+					raise reason
+				else
+					set_deferred_status :failed, reason
+				end
 			end
 		end
 
@@ -95,7 +102,7 @@ module EventMachine
 
 		def self.failed(args)
 			d = new
-			d.tfail(args)
+			d.fail(args)
 			return d
 		end
 	
@@ -133,6 +140,16 @@ module EventMachine
 					}
 				}
 			end
+		end
+	end
+
+	# Used to pass object as parameter of an exception
+	class Failure < StandardError
+		attr_accessor :value
+
+		def initialize(value = nil)
+			super("#{value.class} - #{value}")
+			self.value = value
 		end
 	end
 end
