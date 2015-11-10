@@ -1,3 +1,4 @@
+require 'eventmachine'
 
 # This Monkeypatch implement some of Twisted's defer funtionnalities to EventMachine Deferrable
 # which provide a better exception management during callbacks execution
