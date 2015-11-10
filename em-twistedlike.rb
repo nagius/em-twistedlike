@@ -41,12 +41,20 @@ module EventMachine
 				begin
 					result = block.call(*@deferred_args)
 					if result.kind_of? Exception
-						fail(result)
+						if @errbacks.nil? || @errbacks.empty?
+							raise result	# Raise exception if there is no errback to handle it
+						else
+							fail(result)
+						end
 					else
 						succeed(result)
 					end
 				rescue StandardError => e
-					fail(e)
+					if @errbacks.nil? || @errbacks.empty?
+						raise e	# Raise exception if there is no errback to handle it
+					else
+						fail(e)
+					end
 				end
 			end
 
