@@ -14,7 +14,7 @@ module EventMachine
 			begin
 				block.call
 			rescue StandardError => e
-				d.fail(e)
+				d.tfail(e)
 			end
 		}
 
@@ -41,20 +41,12 @@ module EventMachine
 				begin
 					result = block.call(*@deferred_args)
 					if result.kind_of? Exception
-						if @errbacks.nil? || @errbacks.empty?
-							raise result	# Raise exception if there is no errback to handle it
-						else
-							fail(result)
-						end
+						tfail(result)
 					else
 						succeed(result)
 					end
 				rescue StandardError => e
-					if @errbacks.nil? || @errbacks.empty?
-						raise e	# Raise exception if there is no errback to handle it
-					else
-						fail(e)
-					end
+					tfail(e)
 				end
 			end
 
@@ -79,7 +71,13 @@ module EventMachine
 			if not reason.kind_of? Exception
 				reason = RuntimeError.new(reason)
 			end
-			fail(reason)
+
+			# Raise exception if there is no errback to handle it
+			if @errbacks.nil? || @errbacks.empty?
+				raise reason
+			else
+				fail(reason)
+			end
 		end
 
 		def maybe_deferred
