@@ -22,14 +22,23 @@
 
 require 'eventmachine'
 
-# This Monkeypatch implement some of Twisted's defer funtionnalities to EventMachine Deferrable
-# which provide a better exception management during callbacks execution
+# This Monkeypatch implement some of Twisted's defer funtionnalities to EventMachine Deferrable.
+# This provide convenient helper and also a better exception management during callbacks execution, 
+# ie, the double callback cross-chains of Twisted.
 #
-# For more information, see
-# http://twistedmatrix.com/documents/12.0.0/core/howto/defer.html
+# Each Exception raised during this chain execution is wrapped into a Failure object and passed
+# to the next error callback. The original exception can be retrieved with {Failure#value}.
+#
+# I suggest you to be familiar with the behavior of Twisted. For more information, 
+# see {http://twistedmatrix.com/documents/current/core/howto/defer.html#visual-explanation}
 
 module EventMachine
-	# Wrap the defer into a Deferrable with exception handling
+
+	# Execute the block in a thread with defer() and wrap it into a Deferrable with exception handling.
+	# See {http://twistedmatrix.com/documents/current/api/twisted.internet.threads.deferToThread.html}
+	#
+	# @param block [Block]
+	# @return [Deferrable]
 	def self.defer_to_thread(&block)
 		d=EM::DefaultDeferrable.new
 
@@ -47,18 +56,35 @@ module EventMachine
 	end
 
 	module Deferrable
+		# Add the block to the success callback chain
+		# See {http://twistedmatrix.com/documents/current/api/twisted.internet.defer.Deferred.addCallback.html}
+		#
+		# @param block [Block] The success callback
 		def add_callback(&block)
 			add_callbacks(block, proc { |args| args })
 		end
 
+		# Add the block to the error callback chain
+		# See {http://twistedmatrix.com/documents/current/api/twisted.internet.defer.Deferred.addErrback.html}
+		#
+		# @param block [Block] The error callback
 		def add_errback(&block)
 			add_callbacks(proc { |args| args }, block)
 		end
 
+		# Add the block to both success and error callback chain
+		# See {http://twistedmatrix.com/documents/current/api/twisted.internet.defer.Deferred.addBoth.html}
+		#
+		# @param block [Block] The callback
 		def add_both(&block)
 			add_callbacks(block, block)
 		end
 
+		# Add the block to both success and error callback chain
+		# See {http://twistedmatrix.com/documents/current/api/twisted.internet.defer.Deferred.addCallbacks.html}
+		#
+		# @param success [Proc] The success callback
+		# @param error [Proc] The error callback
 		def add_callbacks(success, error)
 			def call(block)
 				begin
@@ -88,7 +114,12 @@ module EventMachine
 			end
 		end
 		
-		# Trigger the errback chain with wrapping the arg in an Exception if not one
+		# Trigger the errback chain while wrapping the argument in a Failure object.
+		# - If there is no more error callback, the Failure will be raised.
+		# - If multiple arguments are provided, the default behavior of EM will be used.
+		# See {http://twistedmatrix.com/documents/current/api/twisted.internet.defer.Deferred.errback.html}
+		#
+		# @param args [Object, Failure] Usually an object representing an error
 		def fail(*args)
 			if args.size > 1
 				# Multiple arguments: default EM behavior
@@ -109,11 +140,13 @@ module EventMachine
 				end
 			end
 		end
-
+	
+		# TODO: http://twistedmatrix.com/documents/current/api/twisted.internet.defer.maybeDeferred.html
 		def maybe_deferred
 			raise NotImplementedError
 		end
 
+		# TODO: http://twistedmatrix.com/documents/current/core/howto/defer.html#chaining-deferreds
 		def chain_deferred(d)
 			raise NotImplementedError
 		end
@@ -123,23 +156,42 @@ module EventMachine
 	class DefaultDeferrable
 		include Deferrable
 
-		def self.failed(args)
+		# Return a Deferrable that has already had {#fail} called.
+		# See {http://twistedmatrix.com/documents/current/api/twisted.internet.defer.fail.html}
+		#
+		# @param arg [Object, Failure] (see #fail)
+		# @return [Deferrable]
+		def self.failed(arg)
 			d = new
-			d.fail(args)
+			d.fail(arg)
 			return d
 		end
 	
-		def self.succeeded(args)
+		# Return a Deferrable that has already had {#succeed} called.
+		# See {http://twistedmatrix.com/documents/current/api/twisted.internet.defer.succeed.html}
+		#
+		# @param arg [Object] (see #succeed)
+		# @return [Deferrable]
+		def self.succeeded(arg)
 			d = new
-			d.succeed(args)
+			d.succeed(arg)
 			return d
 		end
 	end
 
-	# See https://twistedmatrix.com/documents/current/api/twisted.internet.defer.DeferredList.html
+	# DeferrableList is a tool for collecting the results of several Deferrables.
+	# When they have all completed, the success callback will be fired with an Array of
+	# couple [success, result]. The order of the results is the same than the deferrables array.
+	#
+	# @note The errback chain will never be fired.
+	# @see {https://twistedmatrix.com/documents/current/api/twisted.internet.defer.DeferredList.html}
 	class DeferrableList
 		include Deferrable
 
+		# Create a new DeferrableList
+		#
+		# @params deferrables [Array<Deferrable>] Array of Deferrable to merge
+		# @return [Deferrable] with result [Array<Array<Boolean, Object>>]
 		def initialize(deferrables)
 			@results = []
 			@results_count = deferrables.size
@@ -166,10 +218,13 @@ module EventMachine
 		end
 	end
 
-	# Used to pass object as parameter of an exception
+	# Used to pass an object as value of an exception
 	class Failure < StandardError
-		attr_accessor :value
+		attr_reader :value
 
+		# Create a new Failure
+		#
+		# @param value [Object] Any object, usually representing an error
 		def initialize(value = nil)
 			super("#{value.class} - #{value}")
 			self.value = value
