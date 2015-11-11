@@ -9,14 +9,14 @@ I suggest you to be familiar with the behavior of Twisted. For more information,
 
 ## Main features
 
- - New funtions `Deferrable#add_callback`, `Deferrable#add_errback`, `Deferrable#add_both`, `Deferrable#add_callbacks` that manage callbacks with error management, the Twisted way.
+ - New functions `Deferrable#add_callback`, `Deferrable#add_errback`, `Deferrable#add_both`, `Deferrable#add_callbacks` that manage callbacks with error management, the Twisted way.
  - DeferrableList object to merge multiple Deferrable.
- - Automatically wrap Exception raised within callbacks and params sent to Deferrable#fail into a Failure object.
+ - Automatically wrap Exception raised within callbacks and params sent to `Deferrable#fail` into a Failure object.
  - New helpers `DefaultDeferrable#failed` and `DefaultDeferrable#succeeded` to create already fired Deferrable.
 
 ## Example
 
-```
+```ruby
 require 'em-twistedlike'
 
 EM.run {
@@ -67,5 +67,6 @@ Final result: Error is resolved
 ## License
 
 Copyleft 2015 - Nicolas AGIUS
+
 This module is released under the terms of the GNU GENERAL PUBLIC LICENSE version 3.
 
